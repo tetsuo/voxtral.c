@@ -344,6 +344,14 @@ static void kv_cache_compact(vox_ctx_t *ctx) {
 
     ctx->kv_pos_offset += discard;
     ctx->kv_cache_len = keep;
+
+    if (vox_verbose >= 2)
+        fprintf(stderr, "  Decoder KV compacted: discarded %d, kept %d (offset: %d)\n",
+                discard, keep, ctx->kv_pos_offset);
+    if (vox_monitor) {
+        fprintf(stderr, "\xe2\x9f\xb3"); /* ⟳ = cache compaction */
+        fflush(stderr);
+    }
 }
 
 /* Materialize fp32 cache from fp16 cache and switch runtime to fp32 mode. */

@@ -121,13 +121,13 @@ The `--monitor` flag prints non-intrusive unicode symbols to stderr, inline with
 | `☠` | Critical non-text streak, restart imminent (appended to control/invalid decode symbols) |
 | `◦` | EOS-only decode step |
 | `↺` | Decoder restarted after end-of-sequence |
-| `⟳` | Decoder restarted due to KV cache overflow |
+| `⟳` | Decoder KV cache compacted; transcription continues |
 | `↯` | Decoder restarted due to non-text stall |
 | `⌚` | Decoder restarted due to no-decode watchdog timeout |
 | `✂` | Decoder-only hard reset |
 | `♻` | Full stream reset (mel + encoder + decoder state) |
 
-A healthy stream looks like `▶·▪▪▶▪▪▶▪▪` — encoder chunks interleaved with fast decode batches. If `▸`, `▹`, `⚠`, or `☠` appear frequently, decode is under stress. Restart symbols are normal in long continuous streams; you will typically see pairs like `↺✂`, `⟳♻`, `↯♻`, or `⌚♻`.
+A healthy stream looks like `▶·▪▪▶▪▪▶▪▪` — encoder chunks interleaved with fast decode batches. If `▸`, `▹`, `⚠`, or `☠` appear frequently, decode is under stress. On long streams, `⟳` marks cache compaction without restarting or discarding pending audio. Restarts still occur on EOS (`↺✂`) or recovery from stalls (`↯♻`, `⌚♻`).
 
 ### Reading Audio from Stdin
 

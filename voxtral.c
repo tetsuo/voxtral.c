@@ -385,9 +385,6 @@ void vox_free(vox_ctx_t *ctx) {
 /* Default processing interval in seconds (mel rate = 100 fps) */
 #define STREAM_DEFAULT_INTERVAL  2.0f
 
-/* Max decoder KV cache entries before forced restart on live streams.
- * Bounds attention cost to keep decode steps under control. */
-#define STREAM_MAX_DECODE_KV  2000
 /* If the decoder keeps generating non-text/control tokens for too long,
  * force a hard restart so live transcription can recover. */
 #define STREAM_MAX_NON_TEXT_STREAK  64
@@ -461,7 +458,7 @@ struct vox_stream {
     int waiting_prompt;
     int64_t last_decode_sample; /* real_samples_fed at last decoder token */
     int finished;       /* vox_stream_finish() called */
-    int continuous;     /* live stream: auto-restart decoder on EOS / KV overflow */
+    int continuous;     /* live stream: restart on EOS or decoder stalls */
 
     /* Pending token queue (circular buffer, VOX_MAX_ALT strings per position) */
     const char **token_queue;   /* [queue_cap * VOX_MAX_ALT] */
@@ -1160,7 +1157,6 @@ static void stream_run_decoder(vox_stream_t *s) {
 
     /* Restart decoder on live (non-finished) streams when:
      * - EOS: model decided the segment is done
-     * - KV cache too large: bounds attention cost to keep real-time pace
      * - non-text/invalid streak: catches decoder loops on control tokens
      * - no decoder progress despite advancing audio: catches malformed state */
     int need_restart = 0;
@@ -1169,15 +1165,12 @@ static void stream_run_decoder(vox_stream_t *s) {
         if (s->eos_seen)
             need_restart = 1;
         else if (s->decoder_started &&
-                 s->ctx->kv_cache_len > STREAM_MAX_DECODE_KV)
-            need_restart = 2;
-        else if (s->decoder_started &&
                  s->nontext_streak >= STREAM_MAX_NON_TEXT_STREAK)
-            need_restart = 3;
+            need_restart = 2;
         else if (!s->finished &&
                  (s->real_samples_fed - s->last_decode_sample) >=
                  STREAM_MAX_NO_DECODE_SAMPLES)
-            need_restart = 4;
+            need_restart = 3;
     }
     if (need_restart) {
         if (s->text_since_restart) s->empty_restarts = 0;
@@ -1187,12 +1180,10 @@ static void stream_run_decoder(vox_stream_t *s) {
             full_reset = 1;
 
         if (vox_monitor) {
-            /* ↺ = restart on EOS, ⟳ = restart on KV overflow,
-             * ↯ = non-text stall, ⌚ = no-decode watchdog,
+            /* ↺ = restart on EOS, ↯ = non-text stall, ⌚ = no-decode watchdog,
              * ✂ = decoder hard reset, ♻ = full stream reset */
             const char *sym = (need_restart == 1) ? "\xe2\x86\xba" :
-                              (need_restart == 2) ? "\xe2\x9f\xb3" :
-                              (need_restart == 3) ? "\xe2\x86\xaf" :
+                              (need_restart == 2) ? "\xe2\x86\xaf" :
                                                    "\xe2\x8c\x9a";
             fprintf(stderr, "%s%s", sym,
                     full_reset ? "\xe2\x99\xbb" : "\xe2\x9c\x82");
