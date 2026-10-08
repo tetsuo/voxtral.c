@@ -253,7 +253,7 @@ emitting text and produce EOS within the audio span.
 
 ---
 
-## Online Decode Schedule (not yet implemented in C)
+## Online Decode Schedule
 
 For real-time streaming, the model processes audio incrementally:
 
@@ -262,6 +262,12 @@ For real-time streaming, the model processes audio incrementally:
 3. Audio chunks must be multiples of 40 samples (`|window_size/2 - hop_length|`)
 4. No right padding (lower latency, slightly worse accuracy at utterance boundaries)
 
-The encoder is fully causal (sliding window=750), so past outputs don't change when
-new audio arrives. Implementation requires adding KV cache to the encoder and handling
-conv stem boundary state across chunks.
+The C implementation retains conv stem boundary state and uses rolling KV caches.
+The encoder keeps 750 past positions. When the decoder cache fills, it retains
+the most recent 8192 entries without restarting the stream or dropping queued audio.
+Cached keys keep their original RoPE rotations; new keys use the logical position
+offset accumulated by compaction. Attention masks use indices within the cache.
+
+Continuous mode restarts on EOS or recovery from decoder stalls. Cache capacity
+alone does not trigger a reset. The decoder's 8192-entry attention window covers
+about 11 minutes at 80 ms per step; storage and attention cost remain bounded.
